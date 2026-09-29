@@ -35,29 +35,29 @@
 #' }
 #' @export
 n3d_stream <- function(model, mode = "low_latency") {
-  sizes <- streaming_mode_sizes(mode)
-  cfg <- model$cfg
-  s <- new.env(parent = emptyenv())
-  s$model <- model
-  s$mode <- mode
-  s$chunk_length <- sizes[1]
-  s$right_context <- sizes[2]
-  s$frames_per_chunk <- (sizes[1] + sizes[2]) * cfg$subsampling_factor
-  s$frames_per_step <- sizes[1] * cfg$subsampling_factor
-  s$samples_first <- (s$frames_per_chunk - 1L) * cfg$hop_length +
+    sizes <- streaming_mode_sizes(mode)
+    cfg <- model$cfg
+    s <- new.env(parent = emptyenv())
+    s$model <- model
+    s$mode <- mode
+    s$chunk_length <- sizes[1]
+    s$right_context <- sizes[2]
+    s$frames_per_chunk <- (sizes[1] + sizes[2]) * cfg$subsampling_factor
+    s$frames_per_step <- sizes[1] * cfg$subsampling_factor
+    s$samples_first <- (s$frames_per_chunk - 1L) * cfg$hop_length +
     cfg$win_length %/% 2L
-  s$samples_later <- s$frames_per_chunk * cfg$hop_length + cfg$win_length
-  s$latency_ms <- round(sum(sizes) * cfg$subsampling_factor *
-                        cfg$hop_length / cfg$sample_rate * 1000)
-  s$buffer <- numeric(0)
-  s$buffer_start <- 0 # absolute index (0-based) of buffer[1]
-  s$received <- 0
-  s$start_frame <- 0L
-  s$first <- TRUE
-  s$cache <- NULL
-  s$finished <- FALSE
-  class(s) <- "n3d_stream"
-  s
+    s$samples_later <- s$frames_per_chunk * cfg$hop_length + cfg$win_length
+    s$latency_ms <- round(sum(sizes) * cfg$subsampling_factor *
+                          cfg$hop_length / cfg$sample_rate * 1000)
+    s$buffer <- numeric(0)
+    s$buffer_start <- 0 # absolute index (0-based) of buffer[1]
+    s$received <- 0
+    s$start_frame <- 0L
+    s$first <- TRUE
+    s$cache <- NULL
+    s$finished <- FALSE
+    class(s) <- "n3d_stream"
+    s
 }
 
 #' Push Audio to a Stream
@@ -77,18 +77,18 @@ n3d_stream <- function(model, mode = "low_latency") {
 #' }
 #' @export
 n3d_stream_push <- function(stream, samples) {
-  check_stream(stream)
-  stream$buffer <- c(stream$buffer, as.numeric(samples))
-  stream$received <- stream$received + length(samples)
-  out <- list(empty_probs(stream))
-  repeat {
-    span <- next_chunk_span(stream)
-    # a chunk reaching the end of the received audio could be the last one;
-    # wait for more audio or n3d_stream_finish() to decide
-    if (span[2] >= stream$received) break
-    out[[length(out) + 1L]] <- stream_step(stream, span, is_last = FALSE)
-  }
-  do.call(rbind, out)
+    check_stream(stream)
+    stream$buffer <- c(stream$buffer, as.numeric(samples))
+    stream$received <- stream$received + length(samples)
+    out <- list(empty_probs(stream))
+    repeat {
+        span <- next_chunk_span(stream)
+        # a chunk reaching the end of the received audio could be the last one;
+        # wait for more audio or n3d_stream_finish() to decide
+        if (span[2] >= stream$received) break
+        out[[length(out) + 1L]] <- stream_step(stream, span, is_last = FALSE)
+    }
+    do.call(rbind, out)
 }
 
 #' Finish a Stream
@@ -109,80 +109,80 @@ n3d_stream_push <- function(stream, samples) {
 #' }
 #' @export
 n3d_stream_finish <- function(stream) {
-  check_stream(stream)
-  if (stream$received == 0) {
+    check_stream(stream)
+    if (stream$received == 0) {
+        stream$finished <- TRUE
+        return(empty_probs(stream))
+    }
+    span <- next_chunk_span(stream)
+    out <- stream_step(stream, c(span[1], stream$received), is_last = TRUE)
     stream$finished <- TRUE
-    return(empty_probs(stream))
-  }
-  span <- next_chunk_span(stream)
-  out <- stream_step(stream, c(span[1], stream$received), is_last = TRUE)
-  stream$finished <- TRUE
-  out
+    out
 }
 
 #' @exportS3Method print n3d_stream
 print.n3d_stream <- function(x, ...) {
-  cat("n3d stream (", x$mode, ", ", x$latency_ms, " ms input latency): ",
-      round(x$received / 16000, 2), " s received, ",
-      round(x$start_frame / 100, 2), " s scored",
-      if (x$finished) ", finished", "\n", sep = "")
-  invisible(x)
+    cat("n3d stream (", x$mode, ", ", x$latency_ms, " ms input latency): ",
+        round(x$received / 16000, 2), " s received, ",
+        round(x$start_frame / 100, 2), " s scored",
+        if (x$finished) ", finished", "\n", sep = "")
+    invisible(x)
 }
 
 # Absolute (0-based, end-exclusive) sample span of the next chunk.
 next_chunk_span <- function(stream) {
-  cfg <- stream$model$cfg
-  if (stream$first) {
-    return(c(0, stream$samples_first))
-  }
-  start <- stream$start_frame * cfg$hop_length - cfg$n_fft %/% 2L
-  c(start, start + stream$samples_later)
+    cfg <- stream$model$cfg
+    if (stream$first) {
+        return(c(0, stream$samples_first))
+    }
+    start <- stream$start_frame * cfg$hop_length - cfg$n_fft %/% 2L
+    c(start, start + stream$samples_later)
 }
 
 stream_step <- function(stream, span, is_last) {
-  model <- stream$model
-  from <- span[1] - stream$buffer_start
-  to <- min(span[2], stream$received) - stream$buffer_start
-  piece <- stream$buffer[(from + 1):to]
+    model <- stream$model
+    from <- span[1] - stream$buffer_start
+    to <- min(span[2], stream$received) - stream$buffer_start
+    piece <- stream$buffer[(from + 1):to]
 
-  probs <- torch::with_no_grad({
-    feats <- log_mel(piece, center = stream$first, device = model$device)
-    num_frames <- feats$num_valid
-    features <- feats$features$narrow(2L, 1L, num_frames)
-    if (!is_last && num_frames != stream$frames_per_chunk) {
-      stop("internal error: chunk holds ", num_frames, " mel frames, ",
-           "expected ", stream$frames_per_chunk, call. = FALSE)
+    probs <- torch::with_no_grad({
+        feats <- log_mel(piece, center = stream$first, device = model$device)
+        num_frames <- feats$num_valid
+        features <- feats$features$narrow(2L, 1L, num_frames)
+        if (!is_last && num_frames != stream$frames_per_chunk) {
+            stop("internal error: chunk holds ", num_frames, " mel frames, ",
+                 "expected ", stream$frames_per_chunk, call. = FALSE)
+        }
+        lookahead <- if (is_last) NULL else stream$right_context
+        out <- chunked_forward(model$net, features, cache = stream$cache,
+                               num_lookahead = lookahead)
+        stream$cache <- out$cache
+        as.matrix(out$logits$sigmoid()[1,,, drop = FALSE]$squeeze(1L)$cpu())
+    })
+
+    stream$start_frame <- stream$start_frame + stream$frames_per_step
+    stream$first <- FALSE
+    # drop samples no later chunk needs
+    keep_from <- next_chunk_span(stream)[1]
+    drop <- max(0, keep_from - stream$buffer_start)
+    if (drop > 0) {
+        stream$buffer <- stream$buffer[-seq_len(min(drop,
+                    length(stream$buffer)))]
+        stream$buffer_start <- stream$buffer_start + drop
     }
-    lookahead <- if (is_last) NULL else stream$right_context
-    out <- chunked_forward(model$net, features, cache = stream$cache,
-                           num_lookahead = lookahead)
-    stream$cache <- out$cache
-    as.matrix(out$logits$sigmoid()[1, , , drop = FALSE]$squeeze(1L)$cpu())
-  })
-
-  stream$start_frame <- stream$start_frame + stream$frames_per_step
-  stream$first <- FALSE
-  # drop samples no later chunk needs
-  keep_from <- next_chunk_span(stream)[1]
-  drop <- max(0, keep_from - stream$buffer_start)
-  if (drop > 0) {
-    stream$buffer <- stream$buffer[-seq_len(min(drop,
-                                                length(stream$buffer)))]
-    stream$buffer_start <- stream$buffer_start + drop
-  }
-  probs
+    probs
 }
 
 empty_probs <- function(stream) {
-  matrix(numeric(0), 0L, stream$model$cfg$num_speakers)
+    matrix(numeric(0), 0L, stream$model$cfg$num_speakers)
 }
 
 check_stream <- function(stream) {
-  if (!inherits(stream, "n3d_stream")) {
-    stop("stream must come from n3d_stream()", call. = FALSE)
-  }
-  if (stream$finished) {
-    stop("stream is finished; open a new one with n3d_stream()",
-         call. = FALSE)
-  }
+    if (!inherits(stream, "n3d_stream")) {
+        stop("stream must come from n3d_stream()", call. = FALSE)
+    }
+    if (stream$finished) {
+        stop("stream is finished; open a new one with n3d_stream()",
+             call. = FALSE)
+    }
 }

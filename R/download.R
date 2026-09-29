@@ -15,16 +15,16 @@
 #' n3d_revision()
 #' @export
 n3d_revision <- function() {
-  .n3d_validated_revision
+    .n3d_validated_revision
 }
 
 check_revision <- function(revision) {
-  if (!is.character(revision) || length(revision) != 1L ||
-      is.na(revision) || !grepl("^[0-9a-f]{40}$", revision)) {
-    stop("revision must be a single 40-character hex commit, not a branch ",
-         "name", call. = FALSE)
-  }
-  revision
+    if (!is.character(revision) || length(revision) != 1L ||
+        is.na(revision) || !grepl("^[0-9a-f]{40}$", revision)) {
+        stop("revision must be a single 40-character hex commit, not a branch ",
+             "name", call. = FALSE)
+    }
+    revision
 }
 
 #' Check Whether the Weights Are Cached
@@ -35,14 +35,14 @@ check_revision <- function(revision) {
 #' n3d_exists()
 #' @export
 n3d_exists <- function(revision = n3d_revision()) {
-  # validated outside tryCatch so a bad revision is an error, not FALSE
-  check_revision(revision)
-  tryCatch({
-    path <- hfhub::hub_download(.n3d_repo, "model.safetensors",
-                                revision = revision,
-                                local_files_only = TRUE)
-    file.exists(path)
-  }, error = function(e) FALSE)
+    # validated outside tryCatch so a bad revision is an error, not FALSE
+    check_revision(revision)
+    tryCatch({
+        path <- hfhub::hub_download(.n3d_repo, "model.safetensors",
+                                    revision = revision,
+                                    local_files_only = TRUE)
+        file.exists(path)
+    }, error = function(e) FALSE)
 }
 
 #' Download the Model Weights
@@ -63,23 +63,22 @@ n3d_exists <- function(revision = n3d_revision()) {
 #' }
 #' @export
 download_n3d <- function(revision = n3d_revision(), force = FALSE) {
-  check_revision(revision)
-  if (!force && n3d_exists(revision)) {
-    return(invisible(hfhub::hub_download(.n3d_repo, "model.safetensors",
-                                         revision = revision,
-                                         local_files_only = TRUE)))
-  }
-  if (interactive()) {
-    ok <- utils::askYesNo(paste0(
-      "Download Nemotron 3 Diarization weights (~400 MB, OpenMDW-1.1) ",
-      "from huggingface.co/", .n3d_repo, "?"
-    ))
-    if (!isTRUE(ok)) {
-      stop("download cancelled", call. = FALSE)
+    check_revision(revision)
+    if (!force && n3d_exists(revision)) {
+        return(invisible(hfhub::hub_download(.n3d_repo, "model.safetensors",
+                    revision = revision, local_files_only = TRUE)))
     }
-  }
-  path <- hfhub::hub_download(.n3d_repo, "model.safetensors",
-                              revision = revision,
-                              force_download = force)
-  invisible(path)
+    if (interactive()) {
+        ok <- utils::askYesNo(paste0(
+                                     "Download Nemotron 3 Diarization weights (~400 MB, OpenMDW-1.1) ",
+                                     "from huggingface.co/", .n3d_repo, "?"
+            ))
+        if (!isTRUE(ok)) {
+            stop("download cancelled", call. = FALSE)
+        }
+    }
+    path <- hfhub::hub_download(.n3d_repo, "model.safetensors",
+                                revision = revision,
+                                force_download = force)
+    invisible(path)
 }

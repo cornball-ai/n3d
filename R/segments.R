@@ -19,29 +19,29 @@
 #' probs_to_segments(p)
 #' @export
 probs_to_segments <- function(probs, threshold = 0.5, frame_duration = 0.01) {
-  if (!is.matrix(probs)) {
-    stop("probs must be a frames x speakers matrix", call. = FALSE)
-  }
-  rows <- list()
-  for (spk in seq_len(ncol(probs))) {
-    active <- as.integer(probs[, spk] > threshold)
-    changes <- diff(c(0L, active, 0L))
-    starts <- which(changes == 1L) - 1L
-    ends <- which(changes == -1L) - 1L
-    if (length(starts)) {
-      rows[[length(rows) + 1L]] <- data.frame(
-        start = round(starts * frame_duration, 2),
-        end = round(ends * frame_duration, 2),
-        speaker = spk
-      )
+    if (!is.matrix(probs)) {
+        stop("probs must be a frames x speakers matrix", call. = FALSE)
     }
-  }
-  if (!length(rows)) {
-    return(data.frame(start = numeric(0), end = numeric(0),
-                      speaker = integer(0)))
-  }
-  out <- do.call(rbind, rows)
-  out <- out[order(out$start, out$speaker), , drop = FALSE]
-  rownames(out) <- NULL
-  out
+    rows <- list()
+    for (spk in seq_len(ncol(probs))) {
+        active <- as.integer(probs[, spk] > threshold)
+        changes <- diff(c(0L, active, 0L))
+        starts <- which(changes == 1L) - 1L
+        ends <- which(changes == -1L) - 1L
+        if (length(starts)) {
+            rows[[length(rows) + 1L]] <- data.frame(
+                start = round(starts * frame_duration, 2),
+                end = round(ends * frame_duration, 2),
+                speaker = spk
+            )
+        }
+    }
+    if (!length(rows)) {
+        return(data.frame(start = numeric(0), end = numeric(0),
+                          speaker = integer(0)))
+    }
+    out <- do.call(rbind, rows)
+    out <- out[order(out$start, out$speaker),, drop = FALSE]
+    rownames(out) <- NULL
+    out
 }

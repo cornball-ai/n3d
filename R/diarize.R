@@ -30,33 +30,33 @@
 #' @export
 diarize <- function(audio, model = NULL, threshold = 0.5, probs = FALSE,
                     sample_rate = 16000L) {
-  samples <- as_samples(audio, sample_rate)
-  model <- model %||% cached_model()
-  p <- speaker_probs(model, samples)
-  segments <- probs_to_segments(p, threshold)
-  if (probs) list(segments = segments, probs = p) else segments
+    samples <- as_samples(audio, sample_rate)
+    model <- model %||% cached_model()
+    p <- speaker_probs(model, samples)
+    segments <- probs_to_segments(p, threshold)
+    if (probs) list(segments = segments, probs = p) else segments
 }
 
 # Offline per-frame probabilities for one recording, frames x speakers.
 speaker_probs <- function(model, samples) {
-  torch::with_no_grad({
-    feats <- log_mel(samples, center = TRUE, device = model$device)
-    num_frames <- feats$features$shape[2]
-    valid <- (torch::torch_arange(1, num_frames, device = model$device) <=
-      feats$num_valid)$unsqueeze(1L)
-    out <- chunked_forward(model$net, feats$features, valid)
-    p <- out$logits$sigmoid()
-    p <- p * valid$unsqueeze(-1L)$to(dtype = p$dtype)
-    as.matrix(p[1, , ]$cpu())
-  })
+    torch::with_no_grad({
+        feats <- log_mel(samples, center = TRUE, device = model$device)
+        num_frames <- feats$features$shape[2]
+        valid <- (torch::torch_arange(1, num_frames, device = model$device) <=
+                        feats$num_valid)$unsqueeze(1L)
+        out <- chunked_forward(model$net, feats$features, valid)
+        p <- out$logits$sigmoid()
+        p <- p * valid$unsqueeze(-1L)$to(dtype = p$dtype)
+        as.matrix(p[1,,]$cpu())
+    })
 }
 
 .n3d_env <- new.env(parent = emptyenv())
 
 # Loads the default model once per session.
 cached_model <- function() {
-  if (is.null(.n3d_env$model)) {
-    .n3d_env$model <- load_n3d()
-  }
-  .n3d_env$model
+    if (is.null(.n3d_env$model)) {
+        .n3d_env$model <- load_n3d()
+    }
+    .n3d_env$model
 }
