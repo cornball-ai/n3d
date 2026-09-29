@@ -1,0 +1,26 @@
+COPYRIGHT AND ATTRIBUTION NOTES FOR n3d
+
+n3d is licensed under the Apache License (>= 2). Portions of the package
+are R ports of third-party work:
+
+1. HuggingFace transformers (Apache License 2.0)
+   Copyright The HuggingFace Team.
+   https://github.com/huggingface/transformers
+   The encoder, sub-pixel upsampler, classification head, speaker cache
+   and chunked forward (R/encoder.R, R/rope.R, R/model.R,
+   R/speaker_cache.R, R/forward.R) are R ports of
+   models/nemotron3_diarization/modeling_nemotron3_diarization.py.
+   The log-mel feature extraction (R/features.R) is an R port of
+   models/nemotron_asr_streaming/feature_extraction_nemotron_asr_streaming.py,
+   and the streaming chunk arithmetic and segment extraction (R/stream.R,
+   R/segments.R) follow
+   models/nemotron3_diarization/processing_nemotron3_diarization.py.
+
+2. Mel filterbank (R/mel.R) reimplements the Slaney-style filterbank of
+   librosa (ISC License, Copyright (c) 2013--2023, librosa development
+   team) from its published formula.
+
+The model weights are not included in this package. They are published by
+NVIDIA under the OpenMDW License 1.1 at
+https://huggingface.co/nvidia/Nemotron-3-Diarization and are downloaded only
+when the user calls download_n3d().
