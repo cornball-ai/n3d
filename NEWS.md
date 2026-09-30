@@ -7,8 +7,9 @@
   Ti. `load_n3d()` traces and warms up the layer once (about 1 s).
   `options(n3d.jit = FALSE)` runs the plain R functions; the CPU always
   does.
-- Log-mel features are computed on the CPU and moved to the device, which
-  keeps a whole-file STFT off the GPU.
+- Log-mel features and logits for the whole input stay on the CPU, and
+  one chunk at a time moves to the device, so device memory no longer
+  grows with the length of the audio (0.52 GiB for 9.8 min).
 
 # n3d 0.0.1
 
