@@ -18,8 +18,8 @@
 #' @param valid_BT Optional logical mask of valid mel frames.
 #' @param cache Speaker cache from a previous streaming step, or \code{NULL}.
 #' @param num_lookahead Trailing look-ahead encoder frames, or \code{NULL}.
-#' @return A list with \code{logits} \code{(B, T, S)} and the \code{cache}
-#'   (\code{NULL} in offline mode).
+#' @return A list with \code{logits} \code{(B, T, S)}, on the device of
+#'   \code{features_BTM}, and the \code{cache} (\code{NULL} in offline mode).
 #' @noRd
 chunked_forward <- function(net, features_BTM, valid_BT = NULL, cache = NULL,
                             num_lookahead = NULL) {
@@ -36,10 +36,13 @@ chunked_forward <- function(net, features_BTM, valid_BT = NULL, cache = NULL,
     num_lookahead <- num_lookahead %||% 0L
     factor <- cfg$subsampling_factor
 
+    # Features and logits for the whole input stay where the caller has them
+    # (normally the CPU); only one chunk at a time goes to the model's
+    # device, so device memory does not grow with the length of the audio.
+    device <- net$silence_embeds$device
     b <- features_BTM$shape[1]
     num_frames <- features_BTM$shape[2]
-    embeds_BND <- net$model$audio_tower$embedder(features_BTM)
-    num_embeds <- embeds_BND$shape[2]
+    num_embeds <- (num_frames + factor - 1L) %/% factor
     num_chunk_embeds <- num_embeds - num_lookahead
     if (num_lookahead < 0L || num_chunk_embeds < 1L) {
         stop("num_lookahead (", num_lookahead, ") must be between 0 and one ",
@@ -66,7 +69,13 @@ chunked_forward <- function(net, features_BTM, valid_BT = NULL, cache = NULL,
         end0 <- min(start0 + chunk_length, num_chunk_embeds)
         num_chunk <- end0 - start0
         span <- min(end0 + right_context, num_embeds) - start0
-        chunk_BND <- embeds_BND$narrow(2L, start0 + 1L, span)
+        # stacking groups whole blocks of `factor` mel frames, so embedding a
+        # block-aligned slice equals slicing the embedded whole
+        first_frame <- start0 * factor
+        mel_BTM <- features_BTM$narrow(2L, first_frame + 1L,
+                                       min(span * factor,
+                                           num_frames - first_frame))
+        chunk_BND <- net$model$audio_tower$embedder(mel_BTM$to(device = device))
 
         cached_BND <- cache_embeds(cache, chunk_BND)
         num_cached <- cached_BND$shape[2]
@@ -74,9 +83,10 @@ chunked_forward <- function(net, features_BTM, valid_BT = NULL, cache = NULL,
 
         step_valid <- NULL
         if (!is.null(valid_BN)) {
-            chunk_valid <- valid_BN$narrow(2L, start0 + 1L, span)
+            chunk_valid <- valid_BN$narrow(2L, start0 + 1L, span)$to(
+                device = device)
             ones <- torch::torch_ones(b, num_cached, dtype = torch::torch_bool(),
-                                      device = chunk_valid$device)
+                                      device = device)
             step_valid <- torch::torch_cat(list(ones, chunk_valid), dim = 2L)
         }
 
@@ -86,7 +96,14 @@ chunked_forward <- function(net, features_BTM, valid_BT = NULL, cache = NULL,
 
         logits[[length(logits) + 1L]] <- step_logits$narrow(
             2L, num_cached * factor + 1L, num_chunk * factor
-        )
+        )$to(device = features_BTM$device)
+        # A step leaves ~50 MB of dead tensors (layer outputs, head
+        # temporaries) that R frees only when it collects, and R's heap
+        # barely grows, so on a GPU they pile up over a stream. A minor
+        # collection (~2 ms) releases them while they are still young.
+        if (device$type == "cuda") {
+            invisible(gc(full = FALSE))
+        }
     }
 
     # with no look-ahead, the last encoder frame may be feature-stacking padding

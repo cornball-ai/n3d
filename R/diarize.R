@@ -40,14 +40,18 @@ diarize <- function(audio, model = NULL, threshold = 0.5, probs = FALSE,
 # Offline per-frame probabilities for one recording, frames x speakers.
 speaker_probs <- function(model, samples) {
     torch::with_no_grad({
-        feats <- log_mel(samples, center = TRUE, device = model$device)
+        # Features, mask and logits stay on the CPU; chunked_forward() moves
+        # one chunk at a time to the model's device. A whole-file STFT on the
+        # device would cost more memory than the model, and the CPU matches
+        # the reference closer.
+        feats <- log_mel(samples, center = TRUE, device = "cpu")
         num_frames <- feats$features$shape[2]
-        valid <- (torch::torch_arange(1, num_frames, device = model$device) <=
+        valid <- (torch::torch_arange(1, num_frames) <=
                         feats$num_valid)$unsqueeze(1L)
         out <- chunked_forward(model$net, feats$features, valid)
         p <- out$logits$sigmoid()
         p <- p * valid$unsqueeze(-1L)$to(dtype = p$dtype)
-        as.matrix(p[1,,]$cpu())
+        as.matrix(p[1,,])
     })
 }
 
