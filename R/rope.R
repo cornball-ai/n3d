@@ -29,10 +29,10 @@ rope_cos_sin <- function(seq_len, head_dim, theta = 10000, device = "cpu",
 }
 
 rotate_half <- function(x) {
-    half <- x$shape[length(x$shape)] %/% 2L
-    x1 <- x$narrow(-1L, 1L, half)
-    x2 <- x$narrow(-1L, half + 1L, half)
-    torch::torch_cat(list(-x2, x1), dim = -1L)
+    # chunk(), not narrow(): narrow's start offset is corrupted in a
+    # jit_trace()d graph
+    halves <- x$chunk(2L, dim = -1L)
+    torch::torch_cat(list(-halves[[2]], halves[[1]]), dim = -1L)
 }
 
 apply_rope <- function(x, rope) {

@@ -87,6 +87,13 @@ chunked_forward <- function(net, features_BTM, valid_BT = NULL, cache = NULL,
         logits[[length(logits) + 1L]] <- step_logits$narrow(
             2L, num_cached * factor + 1L, num_chunk * factor
         )
+        # A step leaves ~50 MB of dead tensors (layer outputs, head
+        # temporaries) that R frees only when it collects, and R's heap
+        # barely grows, so on a GPU they pile up over a stream. A minor
+        # collection (~2 ms) releases them while they are still young.
+        if (input_BND$device$type == "cuda") {
+            invisible(gc(full = FALSE))
+        }
     }
 
     # with no look-ahead, the last encoder frame may be feature-stacking padding

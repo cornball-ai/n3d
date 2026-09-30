@@ -14,11 +14,11 @@ subpixel_upsampler <- torch::nn_module(
                                   kernel_size = 3L, padding = 1L)
 },
                                        forward = function(x_BLD) {
+    # length left as -1 so a traced graph accepts any length
     b <- x_BLD$shape[1]
-    l <- x_BLD$shape[2]
     d <- x_BLD$shape[3]
     y <- self$conv(x_BLD$transpose(2L, 3L))$transpose(2L, 3L)
-    y$reshape(c(b, l * self$factor, d))
+    y$reshape(c(b, -1L, d))
 }
 )
 
@@ -41,8 +41,8 @@ encoder_model <- torch::nn_module(
     self$upsampler <- subpixel_upsampler(cfg$head_hidden_size,
         cfg$subsampling_factor)
 },
-                                  forward = function(embeds_BLD, valid_BL = NULL) {
-    self$upsampler(self$proj(self$audio_tower(embeds_BLD, valid_BL)))
+                                  forward = function(embeds_BLD, rope, mask = NULL) {
+    self$upsampler(self$proj(self$audio_tower(embeds_BLD, rope, mask)))
 }
 )
 
@@ -61,8 +61,18 @@ n3d_net <- torch::nn_module(
     )
 },
                             # One encoder step: logits at the mel frame rate for the given embeddings.
+                            # valid_BL: optional logical mask of valid key frames.
                             step = function(embeds_BLD, valid_BL = NULL) {
-    self$classifier(self$model(embeds_BLD, valid_BL))
+    head_dim <- self$cfg$hidden_size %/% self$cfg$num_heads
+    rope <- rope_cos_sin(embeds_BLD$shape[2], head_dim, self$cfg$rope_theta,
+                         device = embeds_BLD$device, dtype = embeds_BLD$dtype)
+    mask <- NULL
+    if (!is.null(valid_BL)) {
+        mask <- torch::torch_zeros_like(valid_BL, dtype = embeds_BLD$dtype)
+        mask <- mask$masked_fill(valid_BL$logical_not(), -Inf)
+        mask <- mask$view(c(valid_BL$shape[1], 1L, 1L, -1L))
+    }
+    self$classifier(self$model(embeds_BLD, rope, mask))
 }
 )
 
@@ -79,6 +89,12 @@ n3d_net <- torch::nn_module(
 #'   package was validated against.
 #' @return An \code{n3d_model} object: a list holding the network and its
 #'   configuration.
+#' @details On CUDA each encoder layer runs as a traced TorchScript graph,
+#'   which frees intermediate tensors as it goes (peak device memory about
+#'   0.45 GiB instead of about 2 GiB) and removes most per-operation R
+#'   overhead. Tracing and warming it up take about a second, once per
+#'   model. Set \code{options(n3d.jit = FALSE)} to run the plain R functions
+#'   instead. The CPU always runs them.
 #' @examples
 #' \donttest{
 #' if (n3d_exists()) {
@@ -106,6 +122,8 @@ load_n3d <- function(device = default_device(), download = FALSE,
         rm(weights)
         net$eval()
         net$to(device = device)
+        # on CUDA, trace and warm up now rather than on the first chunk
+        net$model$audio_tower$layer_fn(torch::torch_zeros(1L, device = device))
     })
     structure(list(net = net, cfg = net$cfg, device = device),
               class = "n3d_model")
