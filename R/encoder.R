@@ -95,9 +95,8 @@ make_layer_forward <- function(num_heads, head_dim) {
         a_BLD <- a_BHLK$transpose(2L, 3L)$reshape(c(1L, -1L, hidden))
         h <- h + torch::nnf_linear(a_BLD, o_w, o_b)
         x <- torch::nnf_layer_norm(h, hidden, ln2_w, ln2_b)
-        h + torch::nnf_linear(torch::nnf_gelu(torch::nnf_linear(x, fc1_w,
-                                                                 fc1_b)),
-                              fc2_w, fc2_b)
+        x <- torch::nnf_gelu(torch::nnf_linear(x, fc1_w, fc1_b))
+        h + torch::nnf_linear(x, fc2_w, fc2_b)
     }
 }
 
@@ -164,19 +163,18 @@ audio_tower <- torch::nn_module(
 # length is served by that graph, so no real chunk pays for compilation.
 trace_layer_forward <- function(tower, device, dtype) {
     weights <- tower$layers[[1]]$weights()
+    hidden <- tower$num_heads * tower$head_dim
     example <- function(l) {
         rope <- rope_cos_sin(l, tower$head_dim, tower$rope_theta,
                              device = device, dtype = dtype)
-        c(list(torch::torch_zeros(1L, l, tower$num_heads * tower$head_dim,
-                                  dtype = dtype, device = device),
-               rope$cos, rope$sin,
-               torch::torch_zeros(1L, 1L, 1L, l, dtype = dtype,
-                                  device = device)),
-          weights)
+        h <- torch::torch_zeros(1L, l, hidden, dtype = dtype, device = device)
+        mask <- torch::torch_zeros(1L, 1L, 1L, l, dtype = dtype,
+                                   device = device)
+        c(list(h, rope$cos, rope$sin, mask), weights)
     }
     torch::with_no_grad({
-        traced <- do.call(torch::jit_trace, c(list(tower$layer_forward),
-                                              example(16L)))
+        args <- c(list(tower$layer_forward), example(16L))
+        traced <- do.call(torch::jit_trace, args)
         for (l in c(16L, 16L, 17L, 17L, 18L, 18L, 18L)) {
             do.call(traced, example(l))
         }
