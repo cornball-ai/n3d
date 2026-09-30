@@ -148,8 +148,7 @@ stream_step <- function(stream, span, is_last) {
     probs <- torch::with_no_grad({
         feats <- log_mel(piece, center = stream$first, device = "cpu")
         num_frames <- feats$num_valid
-        features <- feats$features$narrow(2L, 1L, num_frames)$to(
-            device = model$device)
+        features <- feats$features$narrow(2L, 1L, num_frames)
         if (!is_last && num_frames != stream$frames_per_chunk) {
             stop("internal error: chunk holds ", num_frames, " mel frames, ",
                  "expected ", stream$frames_per_chunk, call. = FALSE)
