@@ -4,3 +4,4 @@
 ^\.github$
 ^CLAUDE\.md$
 ^AGENTS\.md$
+^cran-comments\.md$

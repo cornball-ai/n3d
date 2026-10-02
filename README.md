@@ -9,6 +9,8 @@ order of first arrival, and runs offline or on streaming audio with 0.32 s to
 ## Install
 
 ```r
+install.packages("n3d")
+# development version
 remotes::install_github("cornball-ai/n3d")
 ```
 
@@ -47,7 +49,7 @@ output does not depend on how the audio is split.
 
 Every streaming step re-encodes the speaker cache and FIFO (about 540
 encoder frames) to score one chunk, so real-time streaming needs a GPU. On
-an RTX 5060 Ti a `"low_latency"` step takes about 55 ms per 0.72 s chunk;
+an RTX 5060 Ti a `"low_latency"` step takes about 18 ms per 0.72 s chunk;
 on a 20-thread CPU it takes about 5.5 s. Offline diarization is cheaper:
 30 s of audio takes 0.3 s on that GPU and 11 s on that CPU.
 
