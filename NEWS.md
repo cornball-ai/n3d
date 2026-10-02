@@ -1,3 +1,7 @@
+# n3d 0.1.0
+
+- First CRAN release.
+
 # n3d 0.0.1.1
 
 - On CUDA, encoder layers run as one traced TorchScript function shared by

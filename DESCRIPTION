@@ -1,7 +1,7 @@
 Package: n3d
 Title: Speaker Diarization with 'Nemotron 3 Diarization' in R 'torch'
-Version: 0.0.1.1
-Date: 2026-09-29
+Version: 0.1.0
+Date: 2026-10-01
 Authors@R: c(
     person("Troy", "Hernandez", role = c("aut", "cre"),
            email = "troy@cornball.ai",
