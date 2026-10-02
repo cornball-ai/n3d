@@ -13,6 +13,9 @@ This is a new package.
 0 errors | 0 warnings | 1 note
 
 * New submission.
+* Possibly misspelled words in DESCRIPTION: 'Diarization' and 'Nemotron'
+  are part of the model's name, 'Nemotron 3 Diarization'; 'mel' is the mel
+  frequency scale (log-mel features).
 
 ## Notes for the reviewer
 
